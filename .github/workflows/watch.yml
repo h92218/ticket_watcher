@@ -1,0 +1,43 @@
+name: Watch ticket availability
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # 5분마다 (GitHub Actions 최소 간격)
+  workflow_dispatch:          # 수동 실행 버튼
+
+permissions:
+  contents: write             # last_state.json 커밋용
+
+concurrency:
+  group: watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run watcher
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: python ticket_watcher.py
+
+      - name: Commit state if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [[ -n "$(git status --porcelain last_state.json)" ]]; then
+            git add last_state.json
+            git commit -m "state: update [skip ci]"
+            git push
+          else
+            echo "no state change"
+          fi
